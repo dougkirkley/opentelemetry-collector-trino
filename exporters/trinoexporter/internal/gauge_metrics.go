@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package internal // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/trinoexporter/internal"
+package internal // import "github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// language=ClickHouse SQL
-	createSummaryTableSQL = `
+	// language=Trino SQL
+	createGaugeTableSQL = `
 CREATE TABLE IF NOT EXISTS %s %s (
     ResourceAttributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     ResourceSchemaUrl String CODEC(ZSTD(1)),
@@ -30,15 +30,17 @@ CREATE TABLE IF NOT EXISTS %s %s (
     MetricDescription String CODEC(ZSTD(1)),
     MetricUnit String CODEC(ZSTD(1)),
     Attributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
-	StartTimeUnix DateTime64(9) CODEC(Delta, ZSTD(1)),
-	TimeUnix DateTime64(9) CODEC(Delta, ZSTD(1)),
-    Count UInt64 CODEC(Delta, ZSTD(1)),
-    Sum Float64 CODEC(ZSTD(1)),
-    ValueAtQuantiles Nested(
-		Quantile Float64,
-		Value Float64
-	) CODEC(ZSTD(1)),
-    Flags UInt32  CODEC(ZSTD(1)),
+    StartTimeUnix DateTime64(9) CODEC(Delta, ZSTD(1)),
+    TimeUnix DateTime64(9) CODEC(Delta, ZSTD(1)),
+    Value Float64 CODEC(ZSTD(1)),
+    Flags UInt32 CODEC(ZSTD(1)),
+    Exemplars Nested (
+		FilteredAttributes Map(LowCardinality(String), String),
+		TimeUnix DateTime64(9),
+		Value Float64,
+		SpanId String,
+		TraceId String
+    ) CODEC(ZSTD(1)),
 	INDEX idx_res_attr_key mapKeys(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
 	INDEX idx_res_attr_value mapValues(ResourceAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
 	INDEX idx_scope_attr_key mapKeys(ScopeAttributes) TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -52,8 +54,8 @@ ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix))
 SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
 `
 	// language=ClickHouse SQL
-	insertSummaryTableSQL = `INSERT INTO %s (
-	ResourceAttributes,
+	insertGaugeTableSQL = `INSERT INTO %s (
+    ResourceAttributes,
     ResourceSchemaUrl,
     ScopeName,
     ScopeVersion,
@@ -65,51 +67,54 @@ SETTINGS index_granularity=8192, ttl_only_drop_parts = 1;
     MetricDescription,
     MetricUnit,
     Attributes,
-	StartTimeUnix,
-	TimeUnix,
-    Count,
-    Sum,
-    ValueAtQuantiles.Quantile,
-	ValueAtQuantiles.Value,
-    Flags) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    StartTimeUnix,
+    TimeUnix,
+    Value,
+    Flags,
+    Exemplars.FilteredAttributes,
+	Exemplars.TimeUnix,
+    Exemplars.Value,
+    Exemplars.SpanId,
+    Exemplars.TraceId) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 )
 
-type summaryModel struct {
+type gaugeModel struct {
 	metricName        string
 	metricDescription string
 	metricUnit        string
 	metadata          *MetricsMetaData
-	summary           pmetric.Summary
+	gauge             pmetric.Gauge
 }
 
-type summaryMetrics struct {
-	summaryModel []*summaryModel
-	insertSQL    string
-	count        int
+type gaugeMetrics struct {
+	gaugeModels []*gaugeModel
+	insertSQL   string
+	count       int
 }
 
-func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if s.count == 0 {
+func (g *gaugeMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if g.count == 0 {
 		return nil
 	}
 	start := time.Now()
 	err := doWithTx(ctx, db, func(tx *sql.Tx) error {
-		statement, err := tx.PrepareContext(ctx, s.insertSQL)
+		statement, err := tx.PrepareContext(ctx, g.insertSQL)
 		if err != nil {
 			return err
 		}
+
 		defer func() {
 			_ = statement.Close()
 		}()
-		for _, model := range s.summaryModel {
+
+		for _, model := range g.gaugeModels {
 			resAttr := AttributesToMap(model.metadata.ResAttr)
 			scopeAttr := AttributesToMap(model.metadata.ScopeInstr.Attributes())
 			serviceName := GetServiceName(model.metadata.ResAttr)
 
-			for i := 0; i < model.summary.DataPoints().Len(); i++ {
-				dp := model.summary.DataPoints().At(i)
-				quantiles, values := convertValueAtQuantile(dp.QuantileValues())
-
+			for i := 0; i < model.gauge.DataPoints().Len(); i++ {
+				dp := model.gauge.DataPoints().At(i)
+				attrs, times, values, traceIDs, spanIDs := convertExemplars(dp.Exemplars())
 				_, err = statement.ExecContext(ctx,
 					resAttr,
 					model.metadata.ResURL,
@@ -125,39 +130,36 @@ func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
 					AttributesToMap(dp.Attributes()),
 					dp.StartTimestamp().AsTime(),
 					dp.Timestamp().AsTime(),
-					dp.Count(),
-					dp.Sum(),
-					quantiles,
-					values,
+					getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType()),
 					uint32(dp.Flags()),
+					attrs,
+					times,
+					values,
+					spanIDs,
+					traceIDs,
 				)
 				if err != nil {
 					return fmt.Errorf("ExecContext:%w", err)
 				}
 			}
 		}
-
 		return err
 	})
 	duration := time.Since(start)
 	if err != nil {
-		logger.Debug("insert summary metrics fail", zap.Duration("cost", duration))
-		return fmt.Errorf("insert summary metrics fail:%w", err)
+		logger.Debug("insert gauge metrics fail", zap.Duration("cost", duration))
+		return fmt.Errorf("insert gauge metrics fail:%w", err)
 	}
-
-	// TODO latency metrics
-	logger.Debug("insert summary metrics", zap.Int("records", s.count),
-		zap.Duration("cost", duration))
 	return nil
 }
 
-func (s *summaryMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error {
-	summary, ok := metrics.(pmetric.Summary)
+func (g *gaugeMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics any, name string, description string, unit string) error {
+	gauge, ok := metrics.(pmetric.Gauge)
 	if !ok {
-		return fmt.Errorf("metrics param is not type of Summary")
+		return fmt.Errorf("metrics param is not type of Gauge")
 	}
-	s.count += summary.DataPoints().Len()
-	s.summaryModel = append(s.summaryModel, &summaryModel{
+	g.count += gauge.DataPoints().Len()
+	g.gaugeModels = append(g.gaugeModels, &gaugeModel{
 		metricName:        name,
 		metricDescription: description,
 		metricUnit:        unit,
@@ -167,7 +169,7 @@ func (s *summaryMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcom
 			ScopeURL:   scopeURL,
 			ScopeInstr: scopeInstr,
 		},
-		summary: summary,
+		gauge: gauge,
 	})
 	return nil
 }

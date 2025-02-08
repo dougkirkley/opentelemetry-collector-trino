@@ -1,4 +1,4 @@
-package trinoexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/trinoexporter"
+package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter"
 
 import (
 	"database/sql"

@@ -112,10 +112,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal => ../internal/coreinternal
+replace github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal => ../../internal/coreinternal
 
 replace (
-	github.com/dougkirkley/openelemetry-exporter-trino => ../
+	github.com/dougkirkley/openelemetry-exporter-trino => ../../
 )
 
 retract (

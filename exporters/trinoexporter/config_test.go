@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -18,7 +17,7 @@ import (
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
-	"github.com/dougkirkley/openelemetry-exporter-trino/trinoexporter/internal"
+	"github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter/internal"
 	"github.com/dougkirkley/opentelemetry-collector-trino/trinoexporter/internal/metadata"
 )
 
