@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -27,9 +28,6 @@ func TestLoadConfig(t *testing.T) {
 	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)
 
-	defaultCfg := createDefaultConfig()
-	defaultCfg.(*Config).Endpoint = defaultEndpoint
-
 	storageID := component.MustNewIDWithName("file_storage", "trino")
 
 	tests := []struct {
@@ -37,13 +35,16 @@ func TestLoadConfig(t *testing.T) {
 		expected component.Config
 	}{
 		{
-			id:       component.NewIDWithName(metadata.Type, ""),
-			expected: defaultCfg,
-		},
-		{
-			id: component.NewIDWithName(metadata.Type, "full"),
+			id: component.NewIDWithName(metadata.Type, ""),
 			expected: &Config{
-				TTL: 72 * time.Hour,
+				ClientConfig: confighttp.ClientConfig{
+					Endpoint: defaultEndpoint,
+				},
+				Bucket:    "test",
+				Catalog:   "default",
+				Schema:    "otel",
+				LogsTable: "logs",
+
 				BackOffConfig: configretry.BackOffConfig{
 					Enabled:             true,
 					InitialInterval:     5 * time.Second,
