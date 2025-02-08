@@ -8,6 +8,8 @@ import (
 	"github.com/trinodb/trino-go-client/trino"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	conventions "go.opentelemetry.io/collector/semconv/v1.27.0"
 )
 
 // Config defines configuration for trino exporter.
@@ -55,6 +57,15 @@ func (cfg *Config) Validate() (err error) {
 	}
 
 	return err
+}
+
+func GetServiceName(resAttr pcommon.Map) string {
+	var serviceName string
+	if v, ok := resAttr.Get(conventions.AttributeServiceName); ok {
+		serviceName = v.AsString()
+	}
+
+	return serviceName
 }
 
 func (cfg *Config) buildDB() (*sql.DB, error) {
