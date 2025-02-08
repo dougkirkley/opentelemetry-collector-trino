@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporter/trinoexporter/internal/metadata"
 )
 
 // NewFactory creates a factory for ClickHouse exporter.

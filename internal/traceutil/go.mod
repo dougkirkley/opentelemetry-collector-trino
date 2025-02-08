@@ -1,4 +1,4 @@
-module github.com/dougkirkley/openelemetry-collector-trino/internal/traceutil
+module github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil
 
 go 1.23.3
 
