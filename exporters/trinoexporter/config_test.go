@@ -17,8 +17,8 @@ import (
 	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
-	"github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter/internal"
-	"github.com/dougkirkley/opentelemetry-collector-trino/trinoexporter/internal/metadata"
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal/metadata"
 )
 
 const defaultEndpoint = "trino://127.0.0.1:8080"

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package trinoexporter // import "github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter"
+package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter"
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 
-	"github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter/internal"
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
 )
 
 type metricsExporter struct {

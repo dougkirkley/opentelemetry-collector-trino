@@ -3,7 +3,7 @@
 
 //go:generate mdatagen metadata.yaml
 
-package trinoexporter // import "github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter"
+package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter"
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
-	"github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter/internal"
-	"github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter/internal/metadata"
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
+	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal/metadata"
 )
 
 // NewFactory creates a factory for ClickHouse exporter.

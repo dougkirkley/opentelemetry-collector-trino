@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 
-	"\"github.com/dougkirkley/opentelemetry-collector-trino/trinoexporter/internal"
+	"\"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/traceutil"
 )
