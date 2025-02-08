@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/trinodb/trino-go-client/trino"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -27,8 +26,6 @@ type Config struct {
 	Schema       string `mapstructure:"schema,omitempty"`
 	// LogsTable is the table name for logs. default is `logs`.
 	LogsTable string `mapstructure:"logs_table,omitempty"`
-	// TTL is The data time-to-live example 30m, 48h. 0 means no ttl.
-	TTL time.Duration `mapstructure:"ttl"`
 }
 
 var (

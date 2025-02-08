@@ -123,7 +123,7 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 }
 
 const (
-	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS %s %s (
+	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS "%s.%s.%s" (
 		Timestamp TIMESTAMP(9),
 		TimestampTime TIMESTAMP,
 		TraceId VARCHAR,
@@ -149,7 +149,7 @@ const (
 		location = '%s'
 	)`
 
-	insertLogsSQLTemplate = `INSERT INTO %s (
+	insertLogsSQLTemplate = `INSERT INTO "%s.%s.%s" (
     	Timestamp,
     	TraceId,
     	SpanId,
@@ -207,13 +207,12 @@ func (e *logsExporter) createLogsTable(ctx context.Context, cfg *Config) error {
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
-	ttlExpr := generateTTLExpr(cfg.TTL, "TimestampTime")
 	location := fmt.Sprintf("s3://%s%s", cfg.Bucket, cfg.BucketPrefix)
-	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTable, ttlExpr, location)
+	return fmt.Sprintf(createLogsTableSQL, cfg.Catalog, cfg.Schema, cfg.LogsTable, location)
 }
 
 func renderInsertLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTable)
+	return fmt.Sprintf(insertLogsSQLTemplate, cfg.Catalog, cfg.Schema, cfg.LogsTable)
 }
 
 func doWithTx(_ context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {

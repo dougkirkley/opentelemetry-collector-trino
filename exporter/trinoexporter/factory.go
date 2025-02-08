@@ -28,7 +28,6 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		QueueSettings: exporterhelper.NewDefaultQueueConfig(),
 		BackOffConfig: configretry.NewDefaultBackOffConfig(),
-		TTL:           0,
 		Schema:        "otel",
 		LogsTable:     "logs",
 	}
