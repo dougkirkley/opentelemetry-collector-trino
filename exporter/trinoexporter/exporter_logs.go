@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil"
 	_ "github.com/trinodb/trino-go-client/trino" // For register database driver.
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
+
+	"github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil"
 )
 
 type logsExporter struct {

@@ -85,6 +85,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+replace (
+	github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil => ../../internal/traceutil
+)
+
 retract (
 	v0.76.2
 	v0.76.1
