@@ -13,8 +13,6 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
-
-	"github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil"
 )
 
 type logsExporter struct {
@@ -98,8 +96,8 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 					logAttr := r.Attributes()
 					_, err = statement.ExecContext(ctx,
 						timestamp.AsTime(),
-						traceutil.TraceIDToHexOrEmptyString(r.TraceID()),
-						traceutil.SpanIDToHexOrEmptyString(r.SpanID()),
+						TraceIDToHexOrEmptyString(r.TraceID()),
+						SpanIDToHexOrEmptyString(r.SpanID()),
 						uint32(r.Flags()),
 						r.SeverityText(),
 						int32(r.SeverityNumber()),

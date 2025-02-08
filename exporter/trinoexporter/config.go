@@ -2,6 +2,7 @@ package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"time"
@@ -98,4 +99,22 @@ func getServiceName(resAttr pcommon.Map) string {
 	}
 
 	return serviceName
+}
+
+// SpanIDToHexOrEmptyString returns a hex string from SpanID.
+// An empty string is returned, if SpanID is empty.
+func SpanIDToHexOrEmptyString(id pcommon.SpanID) string {
+	if id.IsEmpty() {
+		return ""
+	}
+	return hex.EncodeToString(id[:])
+}
+
+// TraceIDToHexOrEmptyString returns a hex string from TraceID.
+// An empty string is returned, if TraceID is empty.
+func TraceIDToHexOrEmptyString(id pcommon.TraceID) string {
+	if id.IsEmpty() {
+		return ""
+	}
+	return hex.EncodeToString(id[:])
 }
