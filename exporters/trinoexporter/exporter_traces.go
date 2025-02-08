@@ -17,7 +17,7 @@ import (
 
 	"github.com/dougkirkley/opentelemetry-collector-trino/exporters/trinoexporter/internal"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/traceutil"
+	"github.com/dougkirkley/opentelemetry-collector-trino/internal/coreinternal/traceutil"
 )
 
 type tracesExporter struct {
