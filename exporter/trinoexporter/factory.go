@@ -3,6 +3,7 @@
 package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-trino/exporter/trinoexporter"
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -20,38 +21,22 @@ func NewFactory() exporter.Factory {
 		metadata.Type,
 		createDefaultConfig,
 		exporter.WithLogs(createLogsExporter, metadata.LogsStability),
-		exporter.WithTraces(createTracesExporter, metadata.TracesStability),
-		exporter.WithMetrics(createMetricExporter, metadata.MetricsStability),
 	)
 }
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		TimeoutSettings:  exporterhelper.NewDefaultTimeoutConfig(),
-		QueueSettings:    exporterhelper.NewDefaultQueueConfig(),
-		BackOffConfig:    configretry.NewDefaultBackOffConfig(),
-		ConnectionParams: map[string]string{},
-		Database:         defaultDatabase,
-		LogsTableName:    "otel_logs",
-		TracesTableName:  "otel_traces",
-		TTL:              0,
-		MetricsTables: MetricTablesConfig{
-			Gauge:                internal.MetricTypeConfig{Name: defaultMetricTableName + defaultGaugeSuffix},
-			Sum:                  internal.MetricTypeConfig{Name: defaultMetricTableName + defaultSumSuffix},
-			Summary:              internal.MetricTypeConfig{Name: defaultMetricTableName + defaultSummarySuffix},
-			Histogram:            internal.MetricTypeConfig{Name: defaultMetricTableName + defaultHistogramSuffix},
-			ExponentialHistogram: internal.MetricTypeConfig{Name: defaultMetricTableName + defaultExpHistogramSuffix},
-		},
+		QueueSettings: exporterhelper.NewDefaultQueueConfig(),
+		BackOffConfig: configretry.NewDefaultBackOffConfig(),
+		TTL:           0,
+		Schema:        "otel",
+		LogsTable:     "logs",
 	}
 }
 
 // createLogsExporter creates a new exporter for logs.
-// Logs are directly inserted into ClickHouse.
-func createLogsExporter(
-	ctx context.Context,
-	set exporter.Settings,
-	cfg component.Config,
-) (exporter.Logs, error) {
+// Logs are directly inserted into Trino.
+func createLogsExporter(ctx context.Context, set exporter.Settings, cfg component.Config) (exporter.Logs, error) {
 	c := cfg.(*Config)
 	e, err := newLogsExporter(set.Logger, c)
 	if err != nil {
@@ -65,57 +50,6 @@ func createLogsExporter(
 		e.pushLogsData,
 		exporterhelper.WithStart(e.start),
 		exporterhelper.WithShutdown(e.shutdown),
-		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
-		exporterhelper.WithRetry(c.BackOffConfig),
-	)
-}
-
-// createTracesExporter creates a new exporter for traces.
-// Traces are directly inserted into ClickHouse.
-func createTracesExporter(
-	ctx context.Context,
-	set exporter.Settings,
-	cfg component.Config,
-) (exporter.Traces, error) {
-	c := cfg.(*Config)
-	e, err := newTracesExporter(set.Logger, c)
-	if err != nil {
-		return nil, fmt.Errorf("cannot configure trino traces exporter: %w", err)
-	}
-
-	return exporterhelper.NewTraces(
-		ctx,
-		set,
-		cfg,
-		e.pushTraceData,
-		exporterhelper.WithStart(e.start),
-		exporterhelper.WithShutdown(e.shutdown),
-		exporterhelper.WithTimeout(c.TimeoutSettings),
-		exporterhelper.WithQueue(c.QueueSettings),
-		exporterhelper.WithRetry(c.BackOffConfig),
-	)
-}
-
-func createMetricExporter(
-	ctx context.Context,
-	set exporter.Settings,
-	cfg component.Config,
-) (exporter.Metrics, error) {
-	c := cfg.(*Config)
-	e, err := newMetricsExporter(set.Logger, c)
-	if err != nil {
-		return nil, fmt.Errorf("cannot configure trino metrics exporter: %w", err)
-	}
-
-	return exporterhelper.NewMetrics(
-		ctx,
-		set,
-		cfg,
-		e.pushMetricsData,
-		exporterhelper.WithStart(e.start),
-		exporterhelper.WithShutdown(e.shutdown),
-		exporterhelper.WithTimeout(c.TimeoutSettings),
 		exporterhelper.WithQueue(c.QueueSettings),
 		exporterhelper.WithRetry(c.BackOffConfig),
 	)

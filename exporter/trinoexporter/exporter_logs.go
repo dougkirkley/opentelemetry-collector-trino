@@ -18,50 +18,57 @@ import (
 )
 
 type logsExporter struct {
-	client    *sql.DB
+	cfg       *Config
+	db        *sql.DB
 	insertSQL string
 
-	logger *zap.Logger
-	cfg    *Config
+	logger   *zap.Logger
+	settings component.TelemetrySettings
 }
 
 func newLogsExporter(logger *zap.Logger, cfg *Config) (*logsExporter, error) {
-	client, err := newTrinoClient(cfg)
-	if err != nil {
-		return nil, err
-	}
-
 	return &logsExporter{
-		client:    client,
+		cfg:       cfg,
 		insertSQL: renderInsertLogsSQL(cfg),
 		logger:    logger,
-		cfg:       cfg,
 	}, nil
 }
 
-func (e *logsExporter) start(ctx context.Context, _ component.Host) error {
-	if err := createDatabase(ctx, e.cfg); err != nil {
+func (e *logsExporter) start(ctx context.Context, host component.Host) error {
+	client, err := e.cfg.ClientConfig.ToClient(ctx, host, e.settings)
+	if err != nil {
 		return err
 	}
 
-	return createLogsTable(ctx, e.cfg, e.client)
+	db, err := e.cfg.buildDB(client)
+	if err != nil {
+		return err
+	}
+	e.db = db
+
+	if err := e.createSchema(ctx, e.cfg); err != nil {
+		return err
+	}
+
+	return e.createLogsTable(ctx, e.cfg)
 }
 
 // shutdown will shut down the exporter.
 func (e *logsExporter) shutdown(_ context.Context) error {
-	if e.client != nil {
-		return e.client.Close()
+	if e.db != nil {
+		return e.db.Close()
 	}
 	return nil
 }
 
 func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 	start := time.Now()
-	err := doWithTx(ctx, e.client, func(tx *sql.Tx) error {
+	err := doWithTx(ctx, e.db, func(tx *sql.Tx) error {
 		statement, err := tx.PrepareContext(ctx, e.insertSQL)
 		if err != nil {
-			return fmt.Errorf("PrepareContext:%w", err)
+			return fmt.Errorf("PrepareContext: %w", err)
 		}
+
 		defer func() {
 			_ = statement.Close()
 		}()
@@ -121,104 +128,84 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 }
 
 const (
-	// language=Trino SQL
-	createLogsTableSQL = `
-CREATE TABLE IF NOT EXISTS %s %s (
-    Timestamp TIMESTAMP(9),
-    TimestampTime TIMESTAMP,
-    TraceId VARCHAR,
-    SpanId VARCHAR,
-    TraceFlags TINYINT,
-    SeverityText VARCHAR,
-    SeverityNumber TINYINT,
-    ServiceName VARCHAR,
-    Body VARCHAR,
-    ResourceSchemaUrl VARCHAR,
-    ResourceAttributes MAP(VARCHAR, VARCHAR),
-    ScopeSchemaUrl VARCHAR,
-    ScopeName VARCHAR,
-    ScopeVersion VARCHAR,
-    ScopeAttributes MAP(VARCHAR, VARCHAR),
-    LogAttributes MAP(VARCHAR, VARCHAR)
+	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS %s %s (
+		Timestamp TIMESTAMP(9),
+		TimestampTime TIMESTAMP,
+		TraceId VARCHAR,
+		SpanId VARCHAR,
+		TraceFlags TINYINT,
+		SeverityText VARCHAR,
+		SeverityNumber TINYINT,
+		ServiceName VARCHAR,
+		Body VARCHAR,
+		ResourceSchemaUrl VARCHAR,
+		ResourceAttributes MAP(VARCHAR, VARCHAR),
+		ScopeSchemaUrl VARCHAR,
+		ScopeName VARCHAR,
+		ScopeVersion VARCHAR,
+		ScopeAttributes MAP(VARCHAR, VARCHAR),
+		LogAttributes MAP(VARCHAR, VARCHAR)
+	)
+	WITH (
+		format = 'PARQUET',
+		format_version = 2,
+		partitioning = ARRAY['date(TimestampTime)'],
+		sorted_by = ARRAY['ServiceName', 'TimestampTime'],
+		location = '%s'
+	)`
+
+	insertLogsSQLTemplate = `INSERT INTO %s (
+    	Timestamp,
+    	TraceId,
+    	SpanId,
+    	TraceFlags,
+    	SeverityText,
+    	SeverityNumber,
+    	ServiceName,
+    	Body,
+    	ResourceSchemaUrl,
+    	ResourceAttributes,
+    	ScopeSchemaUrl,
+    	ScopeName,
+    	ScopeVersion,
+    	ScopeAttributes,
+    	LogAttributes
+	) 
+	VALUES (
+    	?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?
+		)`
 )
-WITH (
-    format_version = 2,
-    partitioning = ARRAY['date(TimestampTime)'],
-    sorted_by = ARRAY['ServiceName', 'TimestampTime'],
-    location = '%s'
-)
-`
-	// language=Trino SQL
-	insertLogsSQLTemplate = `
-INSERT INTO %s (
-    Timestamp,
-    TraceId,
-    SpanId,
-    TraceFlags,
-    SeverityText,
-    SeverityNumber,
-    ServiceName,
-    Body,
-    ResourceSchemaUrl,
-    ResourceAttributes,
-    ScopeSchemaUrl,
-    ScopeName,
-    ScopeVersion,
-    ScopeAttributes,
-    LogAttributes
-) 
-VALUES (
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?
-)`
 
 var driverName = "trino" // for testing
 
-// newTrinoClient create a trino client.
-func newTrinoClient(cfg *Config) (*sql.DB, error) {
-	db, err := cfg.buildDB()
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-func createDatabase(ctx context.Context, cfg *Config) error {
-	// use default database to create new database
-	if cfg.Database == defaultDatabase {
-		return nil
-	}
-
-	db, err := cfg.buildDB()
-	if err != nil {
-		return err
-	}
+func (e *logsExporter) createSchema(ctx context.Context, cfg *Config) error {
 	defer func() {
-		_ = db.Close()
+		_ = e.db.Close()
 	}()
-	query := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s %s", cfg.Database, cfg.clusterString())
-	_, err = db.ExecContext(ctx, query)
+	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS "%s.%s"`, cfg.Catalog, cfg.Schema)
+	_, err := e.db.ExecContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("create database: %w", err)
+		return fmt.Errorf("create schema: %w", err)
 	}
 	return nil
 }
 
-func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateLogsTableSQL(cfg)); err != nil {
+func (e *logsExporter) createLogsTable(ctx context.Context, cfg *Config) error {
+	if _, err := e.db.ExecContext(ctx, renderCreateLogsTableSQL(cfg)); err != nil {
 		return fmt.Errorf("exec create logs table sql: %w", err)
 	}
 	return nil
@@ -226,11 +213,12 @@ func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 
 func renderCreateLogsTableSQL(cfg *Config) string {
 	ttlExpr := generateTTLExpr(cfg.TTL, "TimestampTime")
-	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName, cfg.clusterString(), cfg.tableEngineString(), ttlExpr)
+	location := fmt.Sprintf("s3://%s%s", cfg.Bucket, cfg.BucketPrefix)
+	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTable, ttlExpr, location)
 }
 
 func renderInsertLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
+	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTable)
 }
 
 func doWithTx(_ context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
@@ -238,11 +226,14 @@ func doWithTx(_ context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
 	if err != nil {
 		return fmt.Errorf("db.Begin: %w", err)
 	}
+
 	defer func() {
 		_ = tx.Rollback()
 	}()
+
 	if err := fn(tx); err != nil {
 		return err
 	}
+
 	return tx.Commit()
 }

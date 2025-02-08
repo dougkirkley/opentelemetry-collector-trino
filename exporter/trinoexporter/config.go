@@ -3,9 +3,11 @@ package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-
 import (
 	"database/sql"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/trinodb/trino-go-client/trino"
+	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -14,18 +16,16 @@ import (
 
 // Config defines configuration for trino exporter.
 type Config struct {
-	TimeoutSettings           exporterhelper.TimeoutConfig `mapstructure:",squash"`
+	confighttp.ClientConfig   `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
 	QueueSettings             exporterhelper.QueueConfig `mapstructure:"sending_queue"`
 
-	trinoConfig trino.Config
-
-	// Endpoint is the trino endpoint.
-	Endpoint string `mapstructure:"endpoint"`
-	Catalog  string `mapstructure:"catalog"`
-	Schema   string `mapstructure:"schema"`
-	// LogsTable is the table name for logs. default is `otel_logs`.
-	LogsTable string `mapstructure:"logs_table"`
+	Bucket       string `mapstructure:"bucket"`
+	BucketPrefix string `mapstructure:"bucket_prefix,omitempty"`
+	Catalog      string `mapstructure:"catalog"`
+	Schema       string `mapstructure:"schema,omitempty"`
+	// LogsTable is the table name for logs. default is `logs`.
+	LogsTable string `mapstructure:"logs_table,omitempty"`
 	// TTL is The data time-to-live example 30m, 48h. 0 means no ttl.
 	TTL time.Duration `mapstructure:"ttl"`
 }
@@ -33,7 +33,7 @@ type Config struct {
 var (
 	errConfigNoEndpoint = errors.New("endpoint must be specified")
 	errConfigCatalog    = errors.New("catalog must be specified")
-	errConfigSchema     = errors.New("schema must be specified")
+	errConfigNoBucket   = errors.New("bucket must be specified")
 )
 
 // Validate the Trino server configuration.
@@ -41,26 +41,42 @@ func (cfg *Config) Validate() (err error) {
 	if cfg.Endpoint == "" {
 		return errConfigNoEndpoint
 	}
+
 	if cfg.Catalog == "" {
 		return errConfigCatalog
 	}
 
-	if cfg.Schema == "" {
-		return errConfigSchema
+	if cfg.Bucket == "" {
+		return errConfigNoBucket
 	}
 
-	// Validate DSN with trino driver.
-	// Last chance to catch invalid config.
-	_, err = cfg.trinoConfig.FormatDSN()
-	if err != nil {
+	// validate config settings
+	config := trino.Config{
+		ServerURI: cfg.Endpoint,
+		Source:    "trinoexporter",
+		Catalog:   cfg.Catalog,
+	}
+
+	if _, err = config.FormatDSN(); err != nil {
 		return err
 	}
 
 	return err
 }
 
-func (cfg *Config) buildDB() (*sql.DB, error) {
-	dsn, err := cfg.trinoConfig.FormatDSN()
+func (cfg *Config) buildDB(httpClient *http.Client) (*sql.DB, error) {
+	if err := trino.RegisterCustomClient("otel", httpClient); err != nil {
+		return nil, err
+	}
+
+	config := trino.Config{
+		ServerURI:        cfg.Endpoint,
+		Source:           "trinoexporter",
+		Catalog:          cfg.Catalog,
+		Schema:           cfg.Schema,
+		CustomClientName: "otel",
+	}
+	dsn, err := config.FormatDSN()
 	if err != nil {
 		return nil, err
 	}
