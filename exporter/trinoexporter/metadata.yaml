@@ -1,0 +1,5 @@
+type: trino
+status:
+  class: exporter
+  stability:
+    alpha: [logs]
