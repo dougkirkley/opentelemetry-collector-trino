@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dougkirkley/opentelemetry-collector-trino/internal/traceutil"
 	_ "github.com/trinodb/trino-go-client/trino" // For register database driver.
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -69,7 +70,7 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 			res := logs.Resource()
 			resURL := logs.SchemaUrl()
 			resAttr := res.Attributes()
-			serviceName := internal.GetServiceName(res.Attributes())
+			serviceName := getServiceName(res.Attributes())
 
 			for j := 0; j < logs.ScopeLogs().Len(); j++ {
 				rs := logs.ScopeLogs().At(j).LogRecords()
@@ -105,7 +106,7 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 						logAttr,
 					)
 					if err != nil {
-						return fmt.Errorf("ExecContext:%w", err)
+						return fmt.Errorf("ExecContext: %w", err)
 					}
 				}
 			}
