@@ -1,4 +1,4 @@
-module github.com/dougkirkley/openelemetry-exporter-trino/trinoexporter
+module github.com/dougkirkley/openelemetry-collector-trino/exporters/trinoexporter
 
 go 1.22.0
 
