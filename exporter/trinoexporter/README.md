@@ -50,7 +50,22 @@ The data is stored for 72 hours (3 days).
 receivers:
   examplereceiver:
 extensions:
-  
+  oauth2client:
+    client_id: someclientid
+    client_secret: someclientsecret
+    endpoint_params:
+      audience: someaudience
+    token_url: https://keycloak-service.svc.cluster.local:8443/auth/realms/myrealm/auth
+    scopes: ["profile"]
+    # tls settings for the token client
+    tls:
+      ca_file: /ca/root-certs.pem 
+      cert_file: /tls.crt
+      key_file: /tls.key
+    # timeout for the token client
+    timeout: 2s
+    # buffer time before token expiry to refresh
+    expiry_buffer: 10s
 processors:
   batch:
     timeout: 5s
@@ -58,6 +73,8 @@ processors:
 exporters:
   trino:
     endpoint: trino://127.0.0.1:8080
+    auth:
+      authenticator: oauth2client
     catalog: default
     schema: otel
     logs_table: logs 
