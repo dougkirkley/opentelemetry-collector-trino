@@ -14,16 +14,19 @@ import (
 	conventions "go.opentelemetry.io/collector/semconv/v1.27.0"
 )
 
+const (
+	TrinoSource     = "opentelemetry-collector"
+	TrinoClientName = "otel"
+)
+
 // Config defines configuration for trino exporter.
 type Config struct {
 	confighttp.ClientConfig   `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
 	QueueSettings             exporterhelper.QueueConfig `mapstructure:"sending_queue"`
 
-	Bucket       string `mapstructure:"bucket"`
-	BucketPrefix string `mapstructure:"bucket_prefix,omitempty"`
-	Catalog      string `mapstructure:"catalog"`
-	Schema       string `mapstructure:"schema,omitempty"`
+	Catalog string `mapstructure:"catalog"`
+	Schema  string `mapstructure:"schema,omitempty"`
 	// LogsTable is the table name for logs. default is `logs`.
 	LogsTable string `mapstructure:"logs_table,omitempty"`
 }
@@ -31,7 +34,6 @@ type Config struct {
 var (
 	errConfigNoEndpoint = errors.New("endpoint must be specified")
 	errConfigCatalog    = errors.New("catalog must be specified")
-	errConfigNoBucket   = errors.New("bucket must be specified")
 )
 
 // Validate the Trino server configuration.
@@ -44,14 +46,10 @@ func (cfg *Config) Validate() (err error) {
 		return errConfigCatalog
 	}
 
-	if cfg.Bucket == "" {
-		return errConfigNoBucket
-	}
-
 	// validate config settings
 	config := trino.Config{
 		ServerURI: cfg.Endpoint,
-		Source:    "trinoexporter",
+		Source:    TrinoSource,
 		Catalog:   cfg.Catalog,
 	}
 
@@ -69,10 +67,10 @@ func (cfg *Config) buildDB(httpClient *http.Client) (*sql.DB, error) {
 
 	config := trino.Config{
 		ServerURI:        cfg.Endpoint,
-		Source:           "trinoexporter",
+		Source:           TrinoSource,
 		Catalog:          cfg.Catalog,
 		Schema:           cfg.Schema,
-		CustomClientName: "otel",
+		CustomClientName: TrinoClientName,
 	}
 	dsn, err := config.FormatDSN()
 	if err != nil {

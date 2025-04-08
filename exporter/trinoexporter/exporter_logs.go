@@ -145,8 +145,7 @@ const (
 		format = 'PARQUET',
 		format_version = 2,
 		partitioning = ARRAY['date(TimestampTime)'],
-		sorted_by = ARRAY['ServiceName', 'TimestampTime'],
-		location = '%s'
+		sorted_by = ARRAY['ServiceName', 'TimestampTime']
 	)`
 
 	insertLogsSQLTemplate = `INSERT INTO "%s.%s.%s" (
@@ -207,8 +206,7 @@ func (e *logsExporter) createLogsTable(ctx context.Context, cfg *Config) error {
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
-	location := fmt.Sprintf("s3://%s%s", cfg.Bucket, cfg.BucketPrefix)
-	return fmt.Sprintf(createLogsTableSQL, cfg.Catalog, cfg.Schema, cfg.LogsTable, location)
+	return fmt.Sprintf(createLogsTableSQL, cfg.Catalog, cfg.Schema, cfg.LogsTable)
 }
 
 func renderInsertLogsSQL(cfg *Config) string {
