@@ -5,7 +5,6 @@ package trinoexporter // import "github.com/dougkirkley/opentelemetry-collector-
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configretry"
@@ -13,6 +12,11 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
 	"github.com/dougkirkley/opentelemetry-collector-trino/exporter/trinoexporter/internal/metadata"
+)
+
+const (
+	defaultSchema    = "otel"
+	defaultLogsTable = "logs"
 )
 
 // NewFactory creates a factory for ClickHouse exporter.
@@ -28,8 +32,9 @@ func createDefaultConfig() component.Config {
 	return &Config{
 		QueueSettings: exporterhelper.NewDefaultQueueConfig(),
 		BackOffConfig: configretry.NewDefaultBackOffConfig(),
-		Schema:        "otel",
-		LogsTable:     "logs",
+		Schema:        defaultSchema,
+		LogsTable:     defaultLogsTable,
+		CreateSchema:  true,
 	}
 }
 
@@ -52,20 +57,4 @@ func createLogsExporter(ctx context.Context, set exporter.Settings, cfg componen
 		exporterhelper.WithQueue(c.QueueSettings),
 		exporterhelper.WithRetry(c.BackOffConfig),
 	)
-}
-
-func generateTTLExpr(ttl time.Duration, timeField string) string {
-	if ttl > 0 {
-		switch {
-		case ttl%(24*time.Hour) == 0:
-			return fmt.Sprintf(`TTL %s + toIntervalDay(%d)`, timeField, ttl/(24*time.Hour))
-		case ttl%(time.Hour) == 0:
-			return fmt.Sprintf(`TTL %s + toIntervalHour(%d)`, timeField, ttl/time.Hour)
-		case ttl%(time.Minute) == 0:
-			return fmt.Sprintf(`TTL %s + toIntervalMinute(%d)`, timeField, ttl/time.Minute)
-		default:
-			return fmt.Sprintf(`TTL %s + toIntervalSecond(%d)`, timeField, ttl/time.Second)
-		}
-	}
-	return ""
 }

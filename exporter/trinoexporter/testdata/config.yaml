@@ -1,6 +1,5 @@
 trino:
-  endpoint: trino://127.0.0.1:8080
-  bucket: test
+  endpoint: http://127.0.0.1:8080
   catalog: default
   schema: otel
   logs_table: logs

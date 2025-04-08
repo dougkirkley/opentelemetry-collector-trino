@@ -20,7 +20,7 @@ import (
 	"github.com/dougkirkley/opentelemetry-collector-trino/exporter/trinoexporter/internal/metadata"
 )
 
-const defaultEndpoint = "trino://127.0.0.1:8080"
+const defaultEndpoint = "http://127.0.0.1:8080"
 
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
@@ -40,10 +40,10 @@ func TestLoadConfig(t *testing.T) {
 				ClientConfig: confighttp.ClientConfig{
 					Endpoint: defaultEndpoint,
 				},
-				Bucket:    "test",
-				Catalog:   "default",
-				Schema:    "otel",
-				LogsTable: "logs",
+				Catalog:      "default",
+				Schema:       "otel",
+				LogsTable:    "logs",
+				CreateSchema: true,
 
 				BackOffConfig: configretry.BackOffConfig{
 					Enabled:             true,
@@ -76,12 +76,4 @@ func TestLoadConfig(t *testing.T) {
 			assert.Equal(t, tt.expected, cfg)
 		})
 	}
-}
-
-func withDefaultConfig(fns ...func(*Config)) *Config {
-	cfg := createDefaultConfig().(*Config)
-	for _, fn := range fns {
-		fn(cfg)
-	}
-	return cfg
 }

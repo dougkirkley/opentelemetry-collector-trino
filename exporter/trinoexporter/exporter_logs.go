@@ -41,8 +41,10 @@ func (e *logsExporter) start(ctx context.Context, host component.Host) error {
 	}
 	e.db = db
 
-	if err := e.createSchema(ctx, e.cfg); err != nil {
-		return err
+	if e.cfg.CreateSchema {
+		if err = e.createSchema(ctx, e.cfg); err != nil {
+			return err
+		}
 	}
 
 	return e.createLogsTable(ctx, e.cfg)
@@ -123,7 +125,8 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 }
 
 const (
-	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS "%s.%s.%s" (
+	// language=Trino SQL
+	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS "%s"."%s" (
 		Timestamp TIMESTAMP(9),
 		TimestampTime TIMESTAMP,
 		TraceId VARCHAR,
@@ -148,7 +151,8 @@ const (
 		sorted_by = ARRAY['ServiceName', 'TimestampTime']
 	)`
 
-	insertLogsSQLTemplate = `INSERT INTO "%s.%s.%s" (
+	// language=Trino SQL
+	insertLogsSQLTemplate = `INSERT INTO "%s"."%s" (
     	Timestamp,
     	TraceId,
     	SpanId,
@@ -181,7 +185,7 @@ const (
 		?,
 		?,
 		?
-		)`
+	)`
 )
 
 var driverName = "trino" // for testing
@@ -190,7 +194,7 @@ func (e *logsExporter) createSchema(ctx context.Context, cfg *Config) error {
 	defer func() {
 		_ = e.db.Close()
 	}()
-	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS "%s.%s"`, cfg.Catalog, cfg.Schema)
+	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS "%s"`, cfg.Schema)
 	_, err := e.db.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("create schema: %w", err)
@@ -206,11 +210,11 @@ func (e *logsExporter) createLogsTable(ctx context.Context, cfg *Config) error {
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
-	return fmt.Sprintf(createLogsTableSQL, cfg.Catalog, cfg.Schema, cfg.LogsTable)
+	return fmt.Sprintf(createLogsTableSQL, cfg.Schema, cfg.LogsTable)
 }
 
 func renderInsertLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(insertLogsSQLTemplate, cfg.Catalog, cfg.Schema, cfg.LogsTable)
+	return fmt.Sprintf(insertLogsSQLTemplate, cfg.Schema, cfg.LogsTable)
 }
 
 func doWithTx(_ context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
@@ -223,7 +227,7 @@ func doWithTx(_ context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
 		_ = tx.Rollback()
 	}()
 
-	if err := fn(tx); err != nil {
+	if err = fn(tx); err != nil {
 		return err
 	}
 

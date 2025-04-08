@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	TrinoSource     = "opentelemetry-collector"
-	TrinoClientName = "otel"
+	trinoSource     = "opentelemetry-collector"
+	trinoClientName = "otel"
 )
 
 // Config defines configuration for trino exporter.
@@ -29,6 +29,8 @@ type Config struct {
 	Schema  string `mapstructure:"schema,omitempty"`
 	// LogsTable is the table name for logs. default is `logs`.
 	LogsTable string `mapstructure:"logs_table,omitempty"`
+	// CreateSchema if set to true will create the top level schema. default is true.
+	CreateSchema bool `mapstructure:"create_schema"`
 }
 
 var (
@@ -49,7 +51,7 @@ func (cfg *Config) Validate() (err error) {
 	// validate config settings
 	config := trino.Config{
 		ServerURI: cfg.Endpoint,
-		Source:    TrinoSource,
+		Source:    trinoSource,
 		Catalog:   cfg.Catalog,
 	}
 
@@ -61,16 +63,16 @@ func (cfg *Config) Validate() (err error) {
 }
 
 func (cfg *Config) buildDB(httpClient *http.Client) (*sql.DB, error) {
-	if err := trino.RegisterCustomClient("otel", httpClient); err != nil {
+	if err := trino.RegisterCustomClient(trinoClientName, httpClient); err != nil {
 		return nil, err
 	}
 
 	config := trino.Config{
 		ServerURI:        cfg.Endpoint,
-		Source:           TrinoSource,
+		Source:           trinoSource,
 		Catalog:          cfg.Catalog,
 		Schema:           cfg.Schema,
-		CustomClientName: TrinoClientName,
+		CustomClientName: trinoClientName,
 	}
 	dsn, err := config.FormatDSN()
 	if err != nil {
